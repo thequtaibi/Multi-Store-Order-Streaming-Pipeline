@@ -54,7 +54,8 @@ class GenerateOreders:
                     'product_id': 'PROD0020', 
                     'product_name': 'Memory Card', 
                     'product_category': 'Electronics', 
-                    'price': 14.99, 'quantity': 3
+                    'price': 14.99, 
+                    'quantity': 3
                     }, 
                     {......},
                     {......}
