@@ -2,7 +2,7 @@ import random
 from products_details import products
 import time
 from uuid import uuid4
-
+import logging
 
 
 
@@ -74,9 +74,8 @@ class GenerateOreders:
             "timestamp" : time.time()
         }
 
+
         return basket
-
-
 
 
 if __name__ == "__main__":
