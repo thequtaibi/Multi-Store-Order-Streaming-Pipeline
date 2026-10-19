@@ -1,10 +1,15 @@
 import random
-from products_details import products
+from products_details.products_details import products
 import time
 from uuid import uuid4
 import logging
+from products_details.stories_data import stores
 
+""" TODO
+- add store_id
+- add city
 
+"""
 
 
 class GenerateOreders:
@@ -67,9 +72,12 @@ class GenerateOreders:
             for i in range(random.randint(1, 5))
         ]
 
+        
+
         basket = {
             "order_id" : str(uuid4()),
             "customer_id": self.customer_id,
+            "store_id" : random.choice(stores),
             "orders_itemas" : orders,
             "timestamp" : time.time()
         }

@@ -5,6 +5,14 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 import json
+import random
+
+
+"""
+TODO
+send random number of order each time
+"""
+
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -38,23 +46,31 @@ class OrderRequestToKafka:
                 f"offset = {message.offset()}"
             )
 
-    def send_order_request(self, order):
-        try:
-            self.producer.produce(
-                self.topic,
-                key=order["order_id"],
-                value=json.dumps(order).encode("utf-8"),
-                callback=self.delivery_callback
-            )
-        except BufferError:
-            logging.error(f" in order_id = {order["order_id"]}")
-            self.producer.poll(1)
-        self.producer.poll(0)
-        self.producer.flush()
+    def send_order_request(self, orders):
+
+        for order in orders:
+            if not None:
+                try:
+                    self.producer.produce(
+                        self.topic,
+                        key=order["order_id"],
+                        value=json.dumps(order).encode("utf-8"),
+                        callback=self.delivery_callback
+                    )
+                except BufferError:
+                    logging.error(f" in order_id = {order["order_id"]}")
+                    self.producer.poll(1)
+                self.producer.poll(0)
+                self.producer.flush()
 
     def run(self):
         order = GenerateOreders().make_order()
-        self.send_order_request(order)
+        orders = []
+        for i in range(1, random.randrange(10)):
+            orders.append(order)
+
+        print(orders)
+        # self.send_order_request(orders)
 
 
 if __name__ == "__main__":
