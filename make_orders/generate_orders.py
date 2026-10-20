@@ -1,13 +1,12 @@
 import random
-from products_details.products_details import products
+from .products_details.products_details import products
 import time
 from uuid import uuid4
 import logging
-from products_details.stories_data import stores
+from .products_details.stories_data import stores
 
 """ TODO
-- add store_id
-- add city
+
 
 """
 

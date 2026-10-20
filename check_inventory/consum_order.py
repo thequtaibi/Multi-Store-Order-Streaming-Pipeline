@@ -1,12 +1,12 @@
-from confluent_kafka import Consumer
 from sqlalchemy import URL, create_engine, text
-import json
-"""
-TODO
-- consume the order from kafka
-- choice availablety
-- sand the message to orders topic
-"""
+from classes.kafka import KafkaProducer , KafkaConsumer
+import logging
+
+logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s: %(message)s"
+        )
+
 
 DATABASE_URL = URL.create(
             drivername="postgresql+psycopg",
@@ -16,65 +16,65 @@ DATABASE_URL = URL.create(
             port=5432,
             database="ecommerce_practice"
 )
+engine = create_engine(DATABASE_URL)
 
 
-class ORsderVildation:
+class OrderValidation:
     def __init__(self):
-        
-        self.config = {
-            'bootstrap.servers': "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
-            'security.protocol': 'SASL_SSL',
-            'sasl.mechanism': 'PLAIN',
-            'sasl.username': "XGHEHXEMAZQYC2KF",
-            'sasl.password': "cfltHgWM/vc/nHn2OjiklhgXuIUdyYm8iF1sUbqjroN5K3ZAz1z/myO44aRgQH2A",
-            'group.id': 'orders_consumer_group',
-            'auto.offset.reset': 'earliest'
-        }
-        self.consumer = Consumer(self.config)
-        engine = create_engine(self.DATABASE_URL)
-        
+        self.receive_data = KafkaConsumer('order_request')
+        self.send_data = KafkaProducer('orders')
 
-    def resaive_order(self):
-        msg = self.consumer.pause(1)
+    def checking_database(self):
+            orders = self.receive_data.consum()
+    
+            for order in orders:
+                for product in order["orders_itemas"]:
+    
+                    # checking and update the database
+                    message = self.update_database(product)
+    
+                    if message:
+                        product['approval'] = True
+                    else:
+                        product['approval'] = False
 
-        if msg is None:
-            pass
-
-        if msg.error():
-            print(f"Kafka error: {msg.error()}")
-
-        return [json.loads(msg.value().decode('utf-8'))]
-
-
-    def checking_database(orders):
-        engine = create_engine(DATABASE_URL)
-        orders = {}
-
-        for order in orders:
-            product_id = order["product_id"]
-            order_quantity = order["quantity"]
-
-            with engine.begin() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT 
-                            quantity
-                        FROM product
-                        WHERE product_id = :product_id
-                    """),
-                        {
-                            "product_id":product_id 
-                        })
-                available_quantity = result.mappings().first()
-                if int(available_quantity) >= order_quantity:
-                    message = 'approved'
-                else:
-                    message = 'rejected'
                 
-                order["vildation"] = message
-                
+                self.send_data.send(order)
+                        
 
 
+
+    def update_database(self, product):
+        with engine.begin() as conn:
+            result = conn.execute(
+                text(
+                """
+                    UPDATE products 
+                    SET  quantity = quantity - :quantity 
+                    WHERE product_id = :product_id AND quantity >= :quantity
+                    """
+                ),
+                {
+                    "product_id":product["product_id"],
+                    "quantity":product["quantity"] 
+                }
+            )
+        return result.rowcount == 1
+
+    
+
+if __name__ == "__main__":
+    order_validation = OrderValidation()
+
+    try:
+        while True:
+            orders = order_validation.checking_database()
+
+    except KeyboardInterrupt:
+        print("Consumer stopped")
+
+    finally:
+        order_validation.receive_data.consumer.close()
 
 
 
