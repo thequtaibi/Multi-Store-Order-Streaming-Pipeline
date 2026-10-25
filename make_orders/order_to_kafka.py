@@ -15,9 +15,9 @@ class OrderRequestToKafka:
 
 
     def run(self):
-        order = GenerateOreders().make_order()
         orders = []
         for i in range(1, random.randrange(10)):
+            order = GenerateOreders().make_order()
             orders.append(order)
 
         self.kafka_producer.send(orders)
