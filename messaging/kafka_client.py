@@ -40,15 +40,16 @@ class KafkaProducer:
 
         for order in orders:
             if not None:
+                order_id = order.get("order_id")
                 try:
                     self.producer.produce(
                         self.topic,
-                        key=str(order["order_id"]),
+                        key=str(order_id) if order_id else None,
                         value=json.dumps(order).encode("utf-8"),
                         callback=self.delivery_callback
                     )
                 except BufferError:
-                    logging.error(f" in order_id = {order["order_id"]}")
+                    logging.error("Producer buffer full for order_id=%s", order_id)
                     self.producer.poll(1)
                 self.producer.poll(0)
                 self.producer.flush()

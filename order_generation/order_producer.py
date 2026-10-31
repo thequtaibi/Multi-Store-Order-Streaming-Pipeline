@@ -2,11 +2,7 @@
 from .generate_orders import GenerateOreders
 import random
 import time
-from classes.kafka import KafkaProducer
-
-
-
-
+from messaging.kafka_client import KafkaProducer
 
 
 class OrderRequestToKafka:

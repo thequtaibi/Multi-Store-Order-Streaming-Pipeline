@@ -1,5 +1,5 @@
 from sqlalchemy import URL, create_engine, text
-from classes.kafka import KafkaProducer , KafkaConsumer
+from messaging.kafka_client import KafkaProducer , KafkaConsumer
 import logging
 
 logging.basicConfig(
@@ -9,10 +9,8 @@ logging.basicConfig(
 
 
 """TODO
-Require an order ID, 
-valid product IDs, and positive integer quantities. 
-A negative quantity currently could increase stock through your subtraction query.
-
+create database for orders
+and check for duplcated orders by connected the database table
 """
 
 DATABASE_URL = URL.create(
@@ -32,36 +30,32 @@ class OrderValidation:
         self.send_data = KafkaProducer('orders')
 
 
-                        
-
-
     def validation_order(self, order):
-    
+        items = order.get("orders_itemas")
 
-        if order['order_id'] is None:
+        if not order.get("order_id"):
             order["approval"] = False
             order["rejection_reason"] = "missing_order_id"
-        elif len(order['orders_itemas']) < 1:
+        elif not isinstance(items, list) or not items:
             order["approval"] = False
-            order["rejection_reason"] = "no_product/s"
+            order["rejection_reason"] = "missing_or_invalid_items"
         else:
             order["approval"] = True
             order["rejection_reason"] = None
 
-
-        # for product in order['orders_itemas']:
-        #     if not isinstance(product["quantity"], int) and product["quantity"] <= 0:
-        #         order["approval"] = False
-        #         order["rejection_reason"] = f"wrong_quantity_value={product["quantity"]}"
         
         return order
 
-    def validation_product(self, product):
-        if isinstance(product["quantity"], int) and product["quantity"] > 0:
-            return True
-        else:
-            return False
 
+    def validation_product(self, product):
+        product_id = product.get("product_id") # return None of there's no product_id to void erorr
+        quantity = product.get("quantity")
+
+        return ( 
+                isinstance(product_id, str)
+                and type(quantity) is int 
+                and quantity > 0
+        )
 
 
     def update_database(self, product):
@@ -85,9 +79,7 @@ class OrderValidation:
     def run(self):
             orders = self.receive_data.consum()
 
-            
             for order in orders:
-                
                 self.validation_order(order)
                 if order['approval']:
                     for product in order["orders_itemas"]:
@@ -97,13 +89,13 @@ class OrderValidation:
         
                             if message:
                                 product['approval'] = True
-                                order["rejection_reason"] = None
+                                product["rejection_reason"] = None
                             else:
                                 product['approval'] = False
-                                order["rejection_reason"] = "out_of_stock"
+                                product["rejection_reason"] = "out_of_stock"
                         else:
                             product["approval"] = False
-                            product["rejection_reason"] = f"wrong_quantity_value={product["quantity"]}"
+                            product["rejection_reason"] = "invalid_product_id_or_quantity"
                 
                 self.send_data.send(order)
     
