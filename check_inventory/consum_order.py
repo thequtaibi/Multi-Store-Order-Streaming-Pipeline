@@ -31,23 +31,36 @@ class OrderValidation:
         self.receive_data = KafkaConsumer('order_request')
         self.send_data = KafkaProducer('orders')
 
-    def checking_database(self):
-            orders = self.receive_data.consum()
-    
-            for order in orders:
-                for product in order["orders_itemas"]:
-    
-                    # checking and update the database
-                    message = self.update_database(product)
-    
-                    if message:
-                        product['approval'] = True
-                    else:
-                        product['approval'] = False
 
-                
-                self.send_data.send(order)
                         
+
+
+    def validation_order(self, order):
+    
+
+        if order['order_id'] is None:
+            order["approval"] = False
+            order["rejection_reason"] = "missing_order_id"
+        elif len(order['orders_itemas']) < 1:
+            order["approval"] = False
+            order["rejection_reason"] = "no_product/s"
+        else:
+            order["approval"] = True
+            order["rejection_reason"] = None
+
+
+        # for product in order['orders_itemas']:
+        #     if not isinstance(product["quantity"], int) and product["quantity"] <= 0:
+        #         order["approval"] = False
+        #         order["rejection_reason"] = f"wrong_quantity_value={product["quantity"]}"
+        
+        return order
+
+    def validation_product(self, product):
+        if isinstance(product["quantity"], int) and product["quantity"] > 0:
+            return True
+        else:
+            return False
 
 
 
@@ -68,6 +81,31 @@ class OrderValidation:
             )
         return result.rowcount == 1
 
+
+    def run(self):
+            orders = self.receive_data.consum()
+
+            
+            for order in orders:
+                
+                self.validation_order(order)
+                if order['approval']:
+                    for product in order["orders_itemas"]:
+                        
+                        if self.validation_product(product):
+                            message = self.update_database(product)
+        
+                            if message:
+                                product['approval'] = True
+                                order["rejection_reason"] = None
+                            else:
+                                product['approval'] = False
+                                order["rejection_reason"] = "out_of_stock"
+                        else:
+                            product["approval"] = False
+                            product["rejection_reason"] = f"wrong_quantity_value={product["quantity"]}"
+                
+                self.send_data.send(order)
     
 
 if __name__ == "__main__":
@@ -75,7 +113,7 @@ if __name__ == "__main__":
 
     try:
         while True:
-            orders = order_validation.checking_database()
+            orders = order_validation.run()
 
     except KeyboardInterrupt:
         print("Consumer stopped")
