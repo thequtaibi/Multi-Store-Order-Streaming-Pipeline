@@ -6,36 +6,28 @@ import logging
 from .products_details.stories_data import stores
 
 """ TODO
-
-
+Select the product inside add_product(), so baskets can contain different products. Currently, it’s selected once in the constructor.
+it repate the same order 
 """
 
 
 class GenerateOreders:
     def __init__(self):
-        self.product_id = f"PROD{random.randrange(1, 101):04d}"
+        # self.product_id = f"PROD{random.randrange(1, 101):04d}"
         self.customer_id = f"CUST{random.randrange(1,9999):06d}"
         
-    def add_product(self) -> dict:
+    def add_product(self, product_id) -> dict:
         """ create product details 
         
         Return:
             dict : details of single product
         
-        >>> add_product()
-        {
-            'product_id': 'PROD0042', 
-            'product_name': 'Electric Kettle', 
-            'product_category': 'Home & Kitchen', 
-            'price': 34.99, 'quantity': 2
-        }
         """
 
-
-        product = products[self.product_id]
-
+        product = products[product_id]
+        
         return {
-            "product_id" : self.product_id,
+            "product_id" : product_id,
             "product_name" : product['name'],
             "product_category" : product["category"],
             "price" : product['price'],
@@ -47,29 +39,13 @@ class GenerateOreders:
 
         Retrun:
             dict: basket with the details of the orders.
-        
-            
-        >>> make_order()
-        {
-            'order_id': '278e004d-98ae-4b76-8a4d-f5b6aa2d9d90', 
-            'customer_id': 'CUST007247', 
-            'orders_itemas': [
-                    {
-                    'product_id': 'PROD0020', 
-                    'product_name': 'Memory Card', 
-                    'product_category': 'Electronics', 
-                    'price': 14.99, 
-                    'quantity': 3
-                    }, 
-                    {......},
-                    {......}
+    
         """
-        
-        
-        orders = [
-            self.add_product()
-            for i in range(random.randint(1, 5))
-        ]
+        orders = []
+        for i in range(random.randint(1, 5)):
+            product_id = f"PROD{random.randrange(1, 101):04d}"
+            orders.append(self.add_product(product_id))
+
 
         
 
@@ -86,8 +62,8 @@ class GenerateOreders:
 
 
 if __name__ == "__main__":
-    test = GenerateOreders()
-    print(test.make_order())
+    orders = GenerateOreders()
+    print(orders.make_order())
 
 
 

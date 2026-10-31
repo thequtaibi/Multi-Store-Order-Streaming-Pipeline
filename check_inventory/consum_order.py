@@ -8,6 +8,13 @@ logging.basicConfig(
         )
 
 
+"""TODO
+Require an order ID, 
+valid product IDs, and positive integer quantities. 
+A negative quantity currently could increase stock through your subtraction query.
+
+"""
+
 DATABASE_URL = URL.create(
             drivername="postgresql+psycopg",
             username="khlk4004",
