@@ -32,13 +32,19 @@ class OrderValidation:
 
     def validation_order(self, order):
         items = order.get("orders_itemas")
-
+        payment_status = order.get('payment_status')
         if not order.get("order_id"):
             order["approval"] = False
-            order["rejection_reason"] = "missing_order_id"
+            order["rejection_reason"] = "missing order id"
+
         elif not isinstance(items, list) or not items:
             order["approval"] = False
-            order["rejection_reason"] = "missing_or_invalid_items"
+            order["rejection_reason"] = "missing or invalid items"
+
+        elif payment_status == 'declined' or payment_status is None:
+            order["approval"] = False
+            order["rejection_reason"] = "payment state declined"
+
         else:
             order["approval"] = True
             order["rejection_reason"] = None
@@ -112,8 +118,3 @@ if __name__ == "__main__":
 
     finally:
         order_validation.receive_data.consumer.close()
-
-
-
-
-

@@ -51,6 +51,7 @@ class GenerateOreders:
             "customer_id": self.customer_id,
             "store_id" : random.choice(stores),
             "orders_itemas" : orders,
+            "payment_status":  "approved" if random.random() < 0.9 else "declined",
             "timestamp" : time.time()
         }
 
