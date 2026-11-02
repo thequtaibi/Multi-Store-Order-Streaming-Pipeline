@@ -14,14 +14,6 @@ logging.basicConfig(
 create database for orders
 and check for duplcated orders by connected the database table
 """
-class database_con:
-    def __init__(self, drivername, username, password, host, port,database):
-        self.drivername = drivername
-        self.username = username
-        self.password = password
-        self.host = host
-        self.port = port
-        self.database = database
 
     
 

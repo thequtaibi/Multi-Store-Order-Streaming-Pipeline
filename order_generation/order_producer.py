@@ -7,25 +7,25 @@ from messaging.kafka_client import KafkaProducer
 
 class OrderRequestToKafka:
     def __init__(self, topic_name):
-        self.kafka_producer = KafkaProducer()
+        self.kafka_producer = KafkaProducer(topic_name)
 
 
-    def run(self):
+    def run(self, store_id):
         orders = []
         for i in range(1, random.randrange(10)):
-            order = GenerateOreders().make_order()
+            order = GenerateOreders().make_order(store_id)
             orders.append(order)
 
         self.kafka_producer.send(orders)
         
 
-if __name__ == "__main__":
-    store1 = OrderRequestToKafka(topic_name="order_request_s1")
-    store2 = OrderRequestToKafka(topic_name="order_request_s2")
-    store3 = OrderRequestToKafka(topic_name="order_request_s3")
-    while True:
-        store1.run()
-        store2.run()
-        store3.run()
-        time.sleep(random.randrange(1,random.randrange(2,60)))
+# if __name__ == "__main__":
+#     store1 = OrderRequestToKafka(topic_name="order_request_s1")
+#     store2 = OrderRequestToKafka(topic_name="order_request_s2")
+#     store3 = OrderRequestToKafka(topic_name="order_request_s3")
+#     while True:
+#         store1.run()
+#         store2.run()
+#         store3.run()
+#         time.sleep(random.randrange(1,random.randrange(2,60)))
     
