@@ -6,6 +6,9 @@ from messaging.database_con import DatabaseConnector
 class StoreSimulation:
     def __init__(self, store_id, receive_topic, send_topic):
         self.store_id = store_id
+        self.receive_topic = receive_topic
+        self.send_topic = send_topic
+        
         self.engine = DatabaseConnector(
                 drivername="postgresql+psycopg",
                 username="khlk4004",
@@ -14,8 +17,8 @@ class StoreSimulation:
                 port=5432,
                 database=self.store_id,
             ).database_connection()
-        self.validator = OrderValidation(receive_topic, send_topic)
-        self.database_sender = DatabaseSender(send_topic)
+        self.validator = OrderValidation(receive_topic, self.send_topic)
+        self.database_sender = DatabaseSender(self.send_topic)
 
 
 
@@ -31,20 +34,23 @@ class StoreSimulation:
     def send_to_database(self):
         self.database_sender.send(self.engine)
 
+    def run(self):
+        try:
+            while True:
+                self.generate_order(self.store_id, self.receive_topic)
+                self.vaildate_order()
+                self.send_to_database()
+        except KeyboardInterrupt:
+                print("Simulation stopped")
+        finally:
+            try:
+                self.validator.receive_data.consumer.close()
+            finally:
+                self.database_sender.kafka_producer.consumer.close()
+
 
 if __name__ == "__main__":
-    store1 = StoreSimulation('store_1', 'order_request_s1', 'orders_result_s1')
+    store_id = StoreSimulation(store_id="store_1", receive_topic="order_request_s1", send_topic="orders_result_s1")
+    store_id.run()
 
-    try:
-        while True:
-            store1.generate_order("store1", "order_request_s1")
-            store1.vaildate_order()
-            store1.send_to_database()
-    except KeyboardInterrupt:
-            print("Consumer stopped")
-    finally:
-        try:
-            store1.validator.receive_data.consumer.close()
-        finally:
-            store1.database_sender.kafka_producer.consumer.close()
     
