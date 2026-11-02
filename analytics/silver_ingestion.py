@@ -1,4 +1,3 @@
-# Databricks notebook source
 from pyspark.sql.functions import col, from_json, timestamp_seconds, explode
 from pyspark.sql.types import (
     StructType,
@@ -10,10 +9,13 @@ from pyspark.sql.types import (
     DoubleType
 )
 
+"""TODO
+Validate records before writing silver.
+"""
 
 class Silver:
     def __init__(self):
-        self.silver_dir = "orders_project.silver.clean_orders"
+        self.silver_dir = "orders_project.silver"
         self.check_point = "/Volumes/orders_project/silver/checkpoint"
         
 
@@ -40,37 +42,80 @@ class Silver:
                     True
                 ),
                 StructField("timestamp", DoubleType(), True),
+                StructField("payment_status", StringType(), True),
+                StructField("approval", StringType(), True),
+                StructField("rejection_reason", StringType(), True),
+
             ])
 
-    def tranform(self, df_raw):
+    def transform(self, df_raw):
         orders = (
             df_raw
             .select(from_json(col("value"), self.schema()).alias("order"))
             .select("order.*")
             .withColumn("item", explode(col("orders_itemas")))
-            .select("*", "item.*")
+            .select(
+                "*",
+                col("item.product_id").alias("product_id"),
+                col("item.product_name").alias("product_name"),
+                col("item.product_category").alias("product_category"),
+                col("item.price").alias("price"),
+                col("item.quantity").alias("quantity"),
+            )
             .withColumn("total_price",col("price") * col("quantity"))
             .withColumn("date", timestamp_seconds(col("timestamp")))
             .drop("timestamp", "orders_itemas", "item")
         )
 
-        return orders
-
-    def load(self, clean_df):
-        sQuery = (clean_df.writeStream
-                  .queryName('silver_ingestion')
-                  .option('checkpointLocation', self.check_point)
+        approval_orders_df = (orders
+                              .filter(col('approval') == 'true')
+                              .withColumn("total_price",col("price") * col("quantity"))
+                              .select(
+                                  col('order_id'),
+                                  col('store_id'),
+                                  col('customer_id'),
+                                  col('product_id'),
+                                  col('product_name'),
+                                  col('product_category'),
+                                  col('price'),
+                                  col('quantity'),
+                                  col('total_price'),
+                                  col('payment_status'),
+                                  col('date')
+                                  )
+                              )
+        
+        rejected_orders_df = (orders
+                              .filter(col('approval') == 'false')
+                              .select('*'))
+        return approval_orders_df, rejected_orders_df
+    
+    def rejeced_order_load(self, df):
+        sQuery = (df.writeStream
+                  .queryName('silver_ingestion_rejeced_order_load')
+                  .option('checkpointLocation', f"{self.check_point}/approved")
                   .outputMode('append')
                   .trigger(availableNow=True)
-                  .toTable(self.silver_dir)
+                  .toTable(f"{self.silver_dir}.rejected_orders")
+                  )
+        return sQuery
+
+    def approval_orders_load(self, clean_df):
+        sQuery = (clean_df.writeStream
+                  .queryName('silver_ingestion_approval_orders_load')
+                  .option('checkpointLocation', f"{self.check_point}/rejected")
+                  .outputMode('append')
+                  .trigger(processingTime="30 seconds")
+                  .toTable(f"{self.silver_dir}.approval_orders")
                   )
         return sQuery
 
     def run(self):
         df_raw = self.extract()
-        clean_df = self.tranform(df_raw)
-        sQuery = self.load(clean_df)
-        return sQuery
+        approval_orders, rejeced_order = self.transform(df_raw)
 
-silver_query = Silver().run()
-silver_query.awaitTermination()
+        sQuery_approval = self.approval_orders_load(approval_orders)
+        sQuery_rejeced = self.rejeced_order_load(rejeced_order)
+
+        return sQuery_approval, sQuery_rejeced
+

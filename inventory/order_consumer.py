@@ -1,6 +1,8 @@
 from sqlalchemy import URL, create_engine, text
+
 from messaging.kafka_client import KafkaProducer , KafkaConsumer
 import logging
+from messaging.database_con import DatabaseConnector
 
 logging.basicConfig(
         level=logging.INFO,
@@ -12,22 +14,24 @@ logging.basicConfig(
 create database for orders
 and check for duplcated orders by connected the database table
 """
+class database_con:
+    def __init__(self, drivername, username, password, host, port,database):
+        self.drivername = drivername
+        self.username = username
+        self.password = password
+        self.host = host
+        self.port = port
+        self.database = database
 
-DATABASE_URL = URL.create(
-            drivername="postgresql+psycopg",
-            username="khlk4004",
-            password="4004",
-            host="localhost",
-            port=5432,
-            database="ecommerce_practice"
-)
-engine = create_engine(DATABASE_URL)
+    
+
+
 
 
 class OrderValidation:
-    def __init__(self):
-        self.receive_data = KafkaConsumer('order_request')
-        self.send_data = KafkaProducer('orders')
+    def __init__(self, receive_topic, send_topic):
+        self.receive_data = KafkaConsumer(receive_topic)
+        self.send_data = KafkaProducer(send_topic)
 
 
     def validation_order(self, order):
@@ -64,7 +68,7 @@ class OrderValidation:
         )
 
 
-    def update_database(self, product):
+    def update_database(self, product, engine):
         with engine.begin() as conn:
             result = conn.execute(
                 text(
@@ -82,7 +86,7 @@ class OrderValidation:
         return result.rowcount == 1
 
 
-    def run(self):
+    def run(self, engine):
             orders = self.receive_data.consum()
 
             for order in orders:
@@ -91,7 +95,7 @@ class OrderValidation:
                     for product in order["orders_itemas"]:
                         
                         if self.validation_product(product):
-                            message = self.update_database(product)
+                            message = self.update_database(product, engine)
         
                             if message:
                                 product['approval'] = True
@@ -104,17 +108,51 @@ class OrderValidation:
                             product["rejection_reason"] = "invalid_product_id_or_quantity"
                 
                 self.send_data.send(order)
-    
+
+
+
 
 if __name__ == "__main__":
-    order_validation = OrderValidation()
+    store1_eng = DatabaseConnector(
+        drivername="postgresql+psycopg",
+        username="khlk4004",
+        password="4004",
+        host="localhost",
+        port=0000,
+        database="ecommerce_practice"
+    )
+
+    store2_eng = DatabaseConnector(
+            drivername="postgresql+psycopg",
+            username="khlk4004",
+            password="4004",
+            host="localhost",
+            port=0000,
+            database="ecommerce_practice"
+        )
+    store3_eng = DatabaseConnector(
+            drivername="postgresql+psycopg",
+            username="khlk4004",
+            password="4004",
+            host="localhost",
+            port=0000,
+            database="ecommerce_practice"
+        )
+
+    store1_order_validation = OrderValidation(receive_topic="order_request_s1", send_topic="orders_result_s1")
+    store2_order_validation = OrderValidation(receive_topic="order_request_s2", send_topic="orders_result_s2")
+    store3_order_validation = OrderValidation(receive_topic="order_request_s3", send_topic="orders_result_s3")
 
     try:
         while True:
-            orders = order_validation.run()
+            orders_s1 = store1_order_validation.run(store1_eng.database_connection())
+            orders_s2 = store2_order_validation.run(store2_eng.database_connection())
+            orders_s3 = store3_order_validation.run(store3_eng.database_connection())
 
     except KeyboardInterrupt:
         print("Consumer stopped")
 
     finally:
-        order_validation.receive_data.consumer.close()
+        store1_order_validation.receive_data.consumer.close()
+        store2_order_validation.receive_data.consumer.close()
+        store3_order_validation.receive_data.consumer.close()

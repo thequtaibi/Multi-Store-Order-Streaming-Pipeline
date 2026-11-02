@@ -3,10 +3,13 @@ from .products_details.product_catalog import products
 import time
 from uuid import uuid4
 import logging
-from .products_details.stores import stores
 
 
 
+"""TODO
+- Add Currency
+- make the data dirty
+"""
 
 class GenerateOreders:
     def __init__(self):
@@ -31,7 +34,7 @@ class GenerateOreders:
             "quantity" : random.randrange(1,4)
         }
 
-    def make_order(self) -> dict:
+    def make_order(self, store_id) -> dict:
         """ create sinlge basket with multiple products.
 
         Retrun:
@@ -49,7 +52,7 @@ class GenerateOreders:
         basket = {
             "order_id" : str(uuid4()),
             "customer_id": self.customer_id,
-            "store_id" : random.choice(stores),
+            "store_id" : store_id,
             "orders_itemas" : orders,
             "payment_status":  "approved" if random.random() < 0.9 else "declined",
             "timestamp" : time.time()

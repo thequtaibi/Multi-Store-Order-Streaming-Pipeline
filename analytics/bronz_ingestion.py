@@ -1,5 +1,5 @@
-# Databricks notebook source
 from pyspark.sql.functions import from_json, col
+
 
 
 class Bronz:
@@ -47,7 +47,7 @@ class Bronz:
             .queryName('bronz_ingestion')
             .option('checkpointLocation', self.bronz_checkpint)
             .outputMode('append')
-            .trigger(availableNow=True)
+            .trigger(processingTime="30 seconds")
             .toTable(self.bronz_dir)
             )
         return sQuery
@@ -63,7 +63,3 @@ class Bronz:
 
 bronze_query = Bronz().run()
 bronze_query.awaitTermination()
-
-
-# COMMAND ----------
-
