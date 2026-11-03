@@ -1,4 +1,4 @@
-from pyspark.sql.functions import col, from_json, timestamp_seconds, explode
+from pyspark.sql.functions import col, from_json, timestamp_seconds, explode, regexp_replace
 from pyspark.sql.types import (
     StructType,
     StructField,
@@ -15,37 +15,30 @@ Validate records before writing silver.
 
 class Silver:
     def __init__(self):
-        self.silver_dir = "orders_project.silver"
-        self.check_point = "/Volumes/orders_project/silver/checkpoint"
+        self.silver_dir = "orders.silver"
+        self.check_point = "/Volumes/orders/silver/checkpoin"
         
 
     def extract(self):
-        return spark.readStream.table('orders_project.bronze.bronz_order')
+        return spark.readStream.table('orders.bronze.bronz_order')
 
     def schema(self):
         return StructType([
+                StructField("enent_id", StringType(), True),
                 StructField("order_id", StringType(), True),
                 StructField("customer_id", StringType(), True),
                 StructField("store_id", StringType(), True),
-                StructField(
-                    "orders_itemas",
-                    ArrayType(
-                        StructType([
-                            StructField("product_id", StringType(), True),
-                            StructField("product_name", StringType(), True),
-                            StructField("product_category", StringType(), True),
-                            StructField("price", DecimalType(10, 2), True),
-                            StructField("quantity", IntegerType(), True),
-                            StructField("approval", StringType(), True),
-                        ])
-                    ),
-                    True
-                ),
-                StructField("timestamp", DoubleType(), True),
+                StructField("product_id", StringType(), True),
+                StructField("product_name", StringType(), True),
+                StructField("product_category", StringType(), True),
+                StructField("price", StringType(), True),
+                StructField("quantity", IntegerType(), True),
                 StructField("payment_status", StringType(), True),
-                StructField("approval", StringType(), True),
-                StructField("rejection_reason", StringType(), True),
-
+                StructField("timestamp", DoubleType(), True),
+                StructField("order_approval", StringType(), True),
+                StructField("order_rejection_reason", StringType(), True),
+                StructField("item_approval", StringType(), True),
+                StructField("item_rejection_reason", StringType(), True),
             ])
 
     def transform(self, df_raw):
@@ -53,14 +46,10 @@ class Silver:
             df_raw
             .select(from_json(col("value"), self.schema()).alias("order"))
             .select("order.*")
-            .withColumn("item", explode(col("orders_itemas")))
-            .select(
-                "*",
-                col("item.product_id").alias("product_id"),
-                col("item.product_name").alias("product_name"),
-                col("item.product_category").alias("product_category"),
-                col("item.price").alias("price"),
-                col("item.quantity").alias("quantity"),
+            .withColumn(
+                "price",
+                regexp_replace(col("price"), r"[$€]|SAR", "")
+                .cast(DecimalType(10, 2))
             )
             .withColumn("total_price",col("price") * col("quantity"))
             .withColumn("date", timestamp_seconds(col("timestamp")))
@@ -68,9 +57,10 @@ class Silver:
         )
 
         approval_orders_df = (orders
-                              .filter(col('approval') == 'true')
+                              .filter(col('order_approval') == 'true')
                               .withColumn("total_price",col("price") * col("quantity"))
                               .select(
+                                  col('enent_id'),
                                   col('order_id'),
                                   col('store_id'),
                                   col('customer_id'),
@@ -86,7 +76,7 @@ class Silver:
                               )
         
         rejected_orders_df = (orders
-                              .filter(col('approval') == 'false')
+                              .filter(col('order_approval') == 'false')
                               .select('*'))
         return approval_orders_df, rejected_orders_df
     
@@ -119,3 +109,8 @@ class Silver:
 
         return sQuery_approval, sQuery_rejeced
 
+
+
+bronze_query_approval, bronze_query_rejeced  = Silver().run()
+bronze_query_approval.awaitTermination()
+bronze_query_rejeced.awaitTermination()

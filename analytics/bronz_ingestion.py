@@ -4,8 +4,8 @@ from pyspark.sql.functions import from_json, col
 
 class Bronz:
     def __init__(self):
-        self.bronz_dir = "orders_project.bronze.bronz_order"
-        self.bronz_checkpint = "/Volumes/orders_project/bronze/checkpoint"
+        self.bronz_dir = "orders.bronze.bronz_order"
+        self.bronz_checkpint = "/Volumes/orders/bronze/checkpoint"
         self.consumer_conf = {
                 "kafka.bootstrap.servers": "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
                 "subscribe": "orders",
