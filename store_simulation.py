@@ -27,7 +27,6 @@ class StoreSimulation:
         self.send_from_database_to_kafka = SendKafka(topic_name="orders", store_id=self.store_id)
 
 
-
     def generate_order(self):
         self.gen_order_send_kafka.run()
 
