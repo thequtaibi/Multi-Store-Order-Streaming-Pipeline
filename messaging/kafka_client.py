@@ -10,6 +10,7 @@ logging.basicConfig(
 
 class KafkaProducer:
     def __init__(self, topic_name):
+        self.delivery = {"success": None}
         self.topic = topic_name
         self.config = {
             'bootstrap.servers': "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
@@ -17,15 +18,17 @@ class KafkaProducer:
             'sasl.mechanism': 'PLAIN',
             'sasl.username': "XGHEHXEMAZQYC2KF",
             'sasl.password': "cfltHgWM/vc/nHn2OjiklhgXuIUdyYm8iF1sUbqjroN5K3ZAz1z/myO44aRgQH2A",
-            'client.id': 'store_1',
+            'client.id': 'store',
         }
         self.producer = Producer(self.config)
 
 
     def delivery_callback(self, erorr, message):
             if erorr:
+                self.delivery["success"] = False
                 logging.error(f"Delivery Faild {erorr}")
             else:
+                self.delivery["success"] = True
                 logging.info(
                     f"Delivery to {message.key()} "
                     f"partition = {message.topic()} "
@@ -39,13 +42,14 @@ class KafkaProducer:
             orders = [orders]
 
         for order in orders:
+            
             if not None:
                 order_id = order.get("order_id")
                 try:
                     self.producer.produce(
                         self.topic,
                         key=str(order_id) if order_id else None,
-                        value=json.dumps(order).encode("utf-8"),
+                        value=json.dumps(order, default=str).encode("utf-8"),
                         callback=self.delivery_callback
                     )
                 except BufferError:

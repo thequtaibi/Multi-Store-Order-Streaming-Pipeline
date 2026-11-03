@@ -12,8 +12,9 @@ import logging
 """
 
 class GenerateOreders:
-    def __init__(self):
-        # self.product_id = f"PROD{random.randrange(1, 101):04d}"
+    def __init__(self, store_id, currency):
+        self.store_id = store_id
+        self.currency = currency
         self.customer_id = f"CUST{random.randrange(1,9999):06d}"
         
     def add_product(self, product_id) -> dict:
@@ -30,11 +31,11 @@ class GenerateOreders:
             "product_id" : product_id,
             "product_name" : product['name'],
             "product_category" : product["category"],
-            "price" : product['price'],
+            "price" : f"{self.currency}{product['price']}",
             "quantity" : random.randrange(1,4)
         }
 
-    def make_order(self, store_id) -> dict:
+    def make_order(self) -> dict:
         """ create sinlge basket with multiple products.
 
         Retrun:
@@ -52,7 +53,7 @@ class GenerateOreders:
         basket = {
             "order_id" : str(uuid4()),
             "customer_id": self.customer_id,
-            "store_id" : store_id,
+            "store_id" : self.store_id,
             "orders_itemas" : orders,
             "payment_status":  "approved" if random.random() < 0.9 else "declined",
             "timestamp" : time.time()
@@ -63,7 +64,7 @@ class GenerateOreders:
 
 
 if __name__ == "__main__":
-    orders = GenerateOreders()
+    orders = GenerateOreders("store_1", "$")
     print(orders.make_order())
 
 
