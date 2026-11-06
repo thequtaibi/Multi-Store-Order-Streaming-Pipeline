@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from src.messaging.kafka_client import KafkaConsumer
+from messaging.kafka_client import KafkaConsumer
 
 # send data from kafka topic to orders table in the database
 

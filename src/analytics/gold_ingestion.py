@@ -1,41 +1,41 @@
-from pyspark.sql.functions import col
+from pyspark.sql import functions as F
 
-class Gold:
-    def __init__(self, store_id):
-        self.store_id = store_id
-        self.gold_dir = "orders.gold"
+def update_gold(batch_df, batch_id):
+    session = batch_df.sparkSession
 
-    def extract(self):
-        return spark.readStream.table('orders.silver.approval_orders')
+    all_items = session.table("orders.silver.approval_orders")
 
-    def tranform(self, df):
-        return df.filter(col("store_id") == self.store_id)
+    summary = (
+        all_items
+        .groupBy("store_id")
+        .agg(
+            F.count_distinct("order_id")
+                .alias("number_of_orders"),
 
-    def load(self, store_df):
-        sQuery = (store_df.writeStream
-                  .queryName(self.store_id)
-                  .option('checkpointLocation', f"/Volumes/orders/gold/checkpoint/{self.store_id}")
-                  .outputMode('append')
-                  .trigger(processingTime="30 seconds")
-                  .toTable(f"{self.gold_dir}.order{self.store_id}")
-                  )
-        return sQuery
-    
-    def run(self):
-        df = self.extract()
-        store_1_df = self.tranform(df)
-        return self.load(store_1_df)
+            F.sum(F.col("price") * F.col("quantity"))
+                .alias("total_revenue"),
 
-store_1 = Gold('store_1').run()
-store_2 = Gold('store_2').run()
-store_3 = Gold('store_3').run()
+            F.sum("quantity")
+                .alias("total_units_sold")
+        )
+    )
+
+    (
+        summary.write
+        .format("delta")
+        .mode("overwrite")
+        .saveAsTable("orders.gold.store_summary")
+    )
 
 
-try:
-    store_1.awaitTermination()
-    store_2.awaitTermination()
-    store_3.awaitTermination()
-finally:
-    store_1.stop()
-    store_2.stop()
-    store_3.stop()
+query = (
+    spark.readStream
+    .table("orders.silver.approval_orders")
+    .writeStream
+    .foreachBatch(update_gold)
+    .option(
+        "checkpointLocation",
+        "/Volumes/orders/gold/checkpoint/store_summary"
+    )
+    .start()
+)

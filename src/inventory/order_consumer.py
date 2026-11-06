@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from src.messaging.kafka_client import KafkaProducer , KafkaConsumer
+from messaging.kafka_client import KafkaProducer , KafkaConsumer
 
 
 # TODO 

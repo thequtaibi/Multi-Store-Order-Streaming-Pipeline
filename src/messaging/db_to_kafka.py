@@ -1,5 +1,5 @@
-from src.db.db_connector import DatabaseConnector
-from src.messaging.kafka_client import KafkaProducer
+from db.db_connector import DatabaseConnector
+from messaging.kafka_client import KafkaProducer
 
 # send orders from db to kafka topic
 

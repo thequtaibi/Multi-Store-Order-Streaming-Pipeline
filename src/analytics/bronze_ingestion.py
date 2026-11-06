@@ -1,9 +1,10 @@
+from pyspark.sql import DataFrame
 from pyspark.sql.functions import from_json, col
 
 class IngestionData:
     def __init__(self) -> None:
-        self.landing_dir = "/Volumes/test/bronze/landing/new_orders/"
-        self.checkpoint = "/Volumes/test/bronze/checkpoint/kafka_to_json/"
+        self.landing_dir = "/Volumes/orders/bronze/landing/new_orders/"
+        self.checkpoint = "/Volumes/orders/bronze/checkpoint/kafka_to_json/"
         self.kafka_conf = {
             "kafka.bootstrap.servers": "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
             "subscribe": "orders",
@@ -52,7 +53,7 @@ class IngestionData:
         print("starting load_to_json")
         sQuery = (
             df_json.writeStream
-            .format("json")+
+            .format("json")
             .queryName("ingestion_data_from_kafka")
             .outputMode('append')
             .option("maxRecordsPerFile", 1) # make 1 file for each order

@@ -1,116 +1,164 @@
-from pyspark.sql.functions import col, from_json, timestamp_seconds, explode, regexp_replace
-from pyspark.sql.types import (
-    StructType,
-    StructField,
-    StringType,
-    IntegerType,
-    DecimalType,
-    ArrayType,
-    DoubleType
+from pyspark.sql.functions import (
+    col,
+    coalesce,
+    expr,
+    lit,
+    lower,
+    regexp_replace,
+    timestamp_seconds,
+    trim,
+    upper,
+    when,
 )
 
-"""TODO
-Validate records before writing silver.
-"""
 
 class Silver:
     def __init__(self):
         self.silver_dir = "orders.silver"
-        self.check_point = "/Volumes/orders/silver/checkpoin"
-        
+        self.checkpoint = "/Volumes/orders/silver/checkpoint/orders_source"
 
-    def extract(self):
-        return spark.readStream.table('orders.bronze.bronz_order')
+        # Must match your Bronze writer's output path.
+        self.bronze_landing = "/Volumes/orders/bronze/landing/new_orders/"
 
     def schema(self):
-        return StructType([
-                StructField("enent_id", StringType(), True),
-                StructField("order_id", StringType(), True),
-                StructField("customer_id", StringType(), True),
-                StructField("store_id", StringType(), True),
-                StructField("product_id", StringType(), True),
-                StructField("product_name", StringType(), True),
-                StructField("product_category", StringType(), True),
-                StructField("price", StringType(), True),
-                StructField("quantity", IntegerType(), True),
-                StructField("payment_status", StringType(), True),
-                StructField("timestamp", DoubleType(), True),
-                StructField("order_approval", StringType(), True),
-                StructField("order_rejection_reason", StringType(), True),
-                StructField("item_approval", StringType(), True),
-                StructField("item_rejection_reason", StringType(), True),
-            ])
+        return """
+            enent_id STRING,
+            order_id STRING,
+            customer_id STRING,
+            store_id STRING,
+            product_id STRING,
+            product_name STRING,
+            product_category STRING,
+            price STRING,
+            quantity INT,
+            payment_status STRING,
+            timestamp DOUBLE,
+            order_approval STRING,
+            order_rejection_reason STRING,
+            item_approval STRING,
+            item_rejection_reason STRING,
+            sent_to_kafka STRING
+        """
 
-    def transform(self, df_raw):
-        orders = (
-            df_raw
-            .select(from_json(col("value"), self.schema()).alias("order"))
-            .select("order.*")
-            .withColumn(
-                "price",
-                regexp_replace(col("price"), r"[$€]|SAR", "")
-                .cast(DecimalType(10, 2))
-            )
-            .withColumn("total_price",col("price") * col("quantity"))
-            .withColumn("date", timestamp_seconds(col("timestamp")))
-            .drop("timestamp", "orders_itemas", "item")
+    def extract_from_bronze(self):
+        return (
+            spark.readStream
+            .schema(self.schema())
+            .json(f"{self.bronze_landing}*.json")
         )
 
-        approval_orders_df = (orders
-                              .filter(col('order_approval') == 'true')
-                              .withColumn("total_price",col("price") * col("quantity"))
-                              .select(
-                                  col('enent_id'),
-                                  col('order_id'),
-                                  col('store_id'),
-                                  col('customer_id'),
-                                  col('product_id'),
-                                  col('product_name'),
-                                  col('product_category'),
-                                  col('price'),
-                                  col('quantity'),
-                                  col('total_price'),
-                                  col('payment_status'),
-                                  col('date')
-                                  )
-                              )
-        
-        rejected_orders_df = (orders
-                              .filter(col('order_approval') == 'false')
-                              .select('*'))
-        return approval_orders_df, rejected_orders_df
-    
-    def rejeced_order_load(self, df):
-        sQuery = (df.writeStream
-                  .queryName('silver_ingestion_rejeced_order_load')
-                  .option('checkpointLocation', f"{self.check_point}/approved")
-                  .outputMode('append')
-                  .trigger(availableNow=True)
-                  .toTable(f"{self.silver_dir}.rejected_orders")
-                  )
-        return sQuery
+    def transform(self, df):
 
-    def approval_orders_load(self, clean_df):
-        sQuery = (clean_df.writeStream
-                  .queryName('silver_ingestion_approval_orders_load')
-                  .option('checkpointLocation', f"{self.check_point}/rejected")
-                  .outputMode('append')
-                  .trigger(processingTime="30 seconds")
-                  .toTable(f"{self.silver_dir}.approval_orders")
-                  )
-        return sQuery
+
+        orders = (
+            df
+            .withColumn("original_price", col("price"))
+            .withColumn(
+                "currency",
+                when(col("price").startswith("SAR"), "SAR")
+                .when(col("price").startswith("$"), "USD")
+                .when(col("price").startswith("€"), "EUR")
+                .otherwise("UNKNOWN")
+            )
+            .withColumn(
+                "price",
+                trim(
+                    regexp_replace(
+                        col("price"),
+                        r"^(SAR|\$|€)\s*",
+                        ""
+                    )
+                )
+            )
+            .withColumn(
+                "price",
+                expr("try_cast(price AS DECIMAL(18, 2))")
+            )
+            .withColumn(
+                "total_price",
+                col("price") * col("quantity")
+            )
+            .withColumn(
+                "date",
+                timestamp_seconds(col("timestamp"))
+            )
+            .drop("timestamp")
+        )
+
+        
+
+        both_approved = (
+            (col("order_approval") == "true")
+            & (col("item_approval") == "true")
+        )
+
+        approved_orders = (
+            orders.filter(
+            (col('order_approval') == 'true') & (col('payment_status') == 'approved') | (col('item_approval') == 'true'))
+            .select(
+                col('enent_id'),
+                col('order_id'),
+                col('customer_id'),
+                col('store_id'),
+                col('product_id'),
+                col('product_name'),
+                col('product_category'),
+                col('price'),
+                col('quantity'),
+                col('total_price'),
+                col('date'))
+            )
+
+        
+
+        rejected_orders = (orders.filter(
+            (col('order_approval') == 'false') & (col('payment_status') == 'rejected') | (col('item_approval') == 'false')
+        )
+        .select("*")
+        )
+
+        return approved_orders, rejected_orders
+
+    def approved_orders_load(self, df):
+        return (
+            df.writeStream
+            .format("delta")
+            .queryName("silver_ingestion_approved")
+            .option(
+                "checkpointLocation",
+                f"{self.checkpoint}/approved"
+            )
+            .outputMode("append")
+            .toTable(f"{self.silver_dir}.approval_orders")
+        )
+
+    def rejected_orders_load(self, df):
+        return (
+            df.writeStream
+            .format("delta")
+            .queryName("silver_ingestion_rejected")
+            .option(
+                "checkpointLocation",
+                f"{self.checkpoint}/rejected"
+            )
+            .outputMode("append")
+            .toTable(f"{self.silver_dir}.rejected_orders")
+        )
 
     def run(self):
-        df_raw = self.extract()
-        approval_orders, rejeced_order = self.transform(df_raw)
+        df_raw = self.extract_from_bronze()
 
-        sQuery_approval = self.approval_orders_load(approval_orders)
-        sQuery_rejeced = self.rejeced_order_load(rejeced_order)
+        approved_orders, rejected_orders = self.transform(df_raw)
 
-        return sQuery_approval, sQuery_rejeced
+        approved_query = self.approved_orders_load(approved_orders)
+        rejected_query = self.rejected_orders_load(rejected_orders)
+
+        return approved_query, rejected_query
 
 
 
-bronze_query_approval, bronze_query_rejeced  = Silver().run()
-bronze_query_approval.awaitTermination()
-bronze_query_rejeced.awaitTermination()
+
+approved_query, rejected_query = Silver().run()
+
+approved_query.awaitTermination()
+rejected_query.awaitTermination()
