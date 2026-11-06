@@ -1,6 +1,6 @@
 from .generate_orders import GenerateOreders
 import random
-from messaging.kafka_client import KafkaProducer
+from src.messaging.kafka_client import KafkaProducer
 
 
 class OrderRequestToKafka:

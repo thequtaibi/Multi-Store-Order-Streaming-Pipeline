@@ -1,7 +1,7 @@
 from pyspark.sql.functions import from_json, col
 
 class IngestionData:
-    def __init__(self):
+    def __init__(self) -> None:
         self.landing_dir = "/Volumes/test/bronze/landing/new_orders/"
         self.checkpoint = "/Volumes/test/bronze/checkpoint/kafka_to_json/"
         self.kafka_conf = {
@@ -16,7 +16,7 @@ class IngestionData:
                 ),
         }
     
-    def schema(self):
+    def _schema(self) -> any:
         return """
                 enent_id STRING,
                 order_id STRING,
@@ -37,24 +37,22 @@ class IngestionData:
             """
 
 
-    def extarct_from_kafka(self):
-        print("starting pulling form kafka")
+    def extarct_from_kafka(self) -> DataFrame:
         return spark.readStream.format("kafka").options(**self.kafka_conf).load()
     
 
-    def tranform_to_json(self, df_kafka):
-        print("starting tranform_to_json")
+    def tranform_to_json(self, df_kafka) -> DataFrame:
         return (
-            df_kafka.select(
-                from_json(col("value").cast("string"), self.schema()).alias("order"))
+            df_kafka
+            .select(from_json(col("value").cast("string"), self._schema()).alias("order"))
             .select("order.*")
             )
     
-    def load_to_json(self, df_json):
+    def load_to_json(self, df_json) -> any:
         print("starting load_to_json")
         sQuery = (
             df_json.writeStream
-            .format("json")
+            .format("json")+
             .queryName("ingestion_data_from_kafka")
             .outputMode('append')
             .option("maxRecordsPerFile", 1) # make 1 file for each order
@@ -66,13 +64,16 @@ class IngestionData:
         
         return sQuery
     
-    def run_pipeline(self):
+    def run_pipeline(self) -> any:
         print("starting...")
         df_kafa = self.extarct_from_kafka()
         df = self.tranform_to_json(df_kafa)
         sQuery = self.load_to_json(df)
         return sQuery
 
-ingestion = IngestionData()
-sQuery = ingestion.run_pipeline()
-sQuery.awaitTermination()
+def main() -> None:
+    ingestion = IngestionData()
+    sQuery = ingestion.run_pipeline()
+    sQuery.awaitTermination()
+
+main()
