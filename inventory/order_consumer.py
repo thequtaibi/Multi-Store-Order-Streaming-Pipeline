@@ -1,32 +1,17 @@
-from sqlalchemy import URL, create_engine, text
-
+from sqlalchemy import text
 from messaging.kafka_client import KafkaProducer , KafkaConsumer
-import logging
-from messaging.database_con import DatabaseConnector
-
-logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s: %(message)s"
-        )
 
 
-"""TODO
-create database for orders
-and check for duplcated orders by connected the database table
-"""
-
-    
-
-
-
+# TODO 
+# - replace text 
 
 class OrderValidation:
-    def __init__(self, receive_topic, send_topic):
+    def __init__(self, receive_topic, send_topic) -> None:
         self.receive_data = KafkaConsumer(receive_topic)
         self.send_data = KafkaProducer(send_topic)
 
 
-    def validation_order(self, order):
+    def validation_order(self, order) -> any:
         items = order.get("orders_itemas")
         payment_status = order.get('payment_status')
         if not order.get("order_id"):
@@ -45,11 +30,10 @@ class OrderValidation:
             order["approval"] = True
             order["rejection_reason"] = None
 
-        
         return order
 
 
-    def validation_product(self, product):
+    def validation_product(self, product) -> None:
         product_id = product.get("product_id") # return None of there's no product_id to void erorr
         quantity = product.get("quantity")
 
@@ -60,7 +44,7 @@ class OrderValidation:
         )
 
 
-    def update_database(self, product, engine):
+    def update_database(self, product, engine) -> bool:
         with engine.begin() as conn:
             result = conn.execute(
                 text(
@@ -75,10 +59,11 @@ class OrderValidation:
                     "quantity":product["quantity"] 
                 }
             )
+
         return result.rowcount == 1
 
 
-    def run(self, engine):
+    def run(self, engine) -> None:
             orders = self.receive_data.consum()
 
             for order in orders:

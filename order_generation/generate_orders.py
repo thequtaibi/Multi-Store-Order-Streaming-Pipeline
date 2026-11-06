@@ -2,14 +2,7 @@ import random
 from .products_details.product_catalog import products
 import time
 from uuid import uuid4
-import logging
 
-
-
-"""TODO
-- Add Currency
-- make the data dirty
-"""
 
 class GenerateOreders:
     def __init__(self, store_id, currency):

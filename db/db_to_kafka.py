@@ -1,23 +1,14 @@
-from messaging.database_con import DatabaseConnector
+from db.database_con import DatabaseConnector
 from messaging.kafka_client import KafkaProducer
 
 
 class SendKafka:
-    def __init__(self, store_id, topic_name):
-        self.engine = DatabaseConnector(
-                        drivername="postgresql+psycopg",
-                        username="khlk4004",
-                        password="4004",
-                        host="localhost",
-                        port=5432,
-                        database=store_id,
-                    ).database_connection()
-
+    def __init__(self, topic_name, engine) -> None:
+        self.engine = engine
         self.kafka_producer = KafkaProducer(topic_name)
 
 
-
-    def read_from_database(self):
+    def read_from_database(self)-> list:
         query = """
             SELECT 
                 id AS enent_id,
@@ -45,18 +36,7 @@ class SendKafka:
             return [dict(row) for row in result.mappings().all()]
 
 
-    def send_pending(self):
-        orders = self.read_from_database()
-
-        for order in orders:
-             self.kafka_producer.delivery["success"] = None
-             self.kafka_producer.send(order)
-             if self.kafka_producer.delivery["success"]:
-                  self.update_database(order['enent_id'])
-            
-
-        
-    def update_database(self, id):
+    def update_database(self, id) -> None:
             query = """
                 UPDATE orders
                 SET sent_to_kafka = TRUE
@@ -67,7 +47,16 @@ class SendKafka:
                 conn.exec_driver_sql(query, {"id": id})
 
 
+    def send_pending(self) -> None:
+        orders = self.read_from_database()
 
+        for order in orders:
+             self.kafka_producer.delivery["success"] = None
+             self.kafka_producer.send(order)
+             if self.kafka_producer.delivery["success"]:
+                  self.update_database(order['enent_id'])
+
+            
     def run(self):
          self.read_from_database()
          self.send_pending()

@@ -2,7 +2,7 @@ from sqlalchemy import text
 from messaging.kafka_client import KafkaConsumer
 
 class DatabaseSender:
-    def __init__(self, topic_name):
+    def __init__(self, topic_name) -> None:
         self.topic_name = topic_name
         self.kafka_producer = KafkaConsumer(self.topic_name)
 
@@ -10,7 +10,7 @@ class DatabaseSender:
         return self.kafka_producer.consum()
 
 
-    def send(self, engine):
+    def send(self, engine) -> None:
 
         orders = self.read_kafka()
 
@@ -34,7 +34,7 @@ class DatabaseSender:
             if not isinstance(items, list) or not items:
                 items = [None]
 
-            # Commit all item rows for this order together.
+
             with engine.begin() as conn:
                 for item in items:
                     if not isinstance(item, dict):

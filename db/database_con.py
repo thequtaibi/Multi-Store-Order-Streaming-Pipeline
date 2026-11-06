@@ -1,4 +1,4 @@
-from sqlalchemy import URL, create_engine, text
+from sqlalchemy import URL, create_engine
 
 
 class DatabaseConnector:

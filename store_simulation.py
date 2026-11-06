@@ -1,13 +1,13 @@
 from order_generation.order_producer import OrderRequestToKafka
 from inventory.order_consumer import OrderValidation
-from database_sender.database_sender import DatabaseSender
-from messaging.database_con import DatabaseConnector
-from send_kafka import SendKafka
+from db.database_sender import DatabaseSender
+from db.database_con import DatabaseConnector
+from db.db_to_kafka import SendKafka
 import time
 import random
 
 class StoreSimulation:
-    def __init__(self, store_id, currency, receive_topic, send_topic):
+    def __init__(self, store_id, currency, receive_topic, send_topic) -> None:
         self.store_id = store_id
         self.currency = currency
         self.receive_topic = receive_topic
@@ -21,26 +21,39 @@ class StoreSimulation:
                 port=5432,
                 database=self.store_id,
             ).database_connection()
+        self.gen_order_send_kafka = OrderRequestToKafka(store_id=self.store_id, currency=self.currency, topic_name=self.receive_topic)    
+        # vaild the order and send them to another kafka topic = orders_result_sx
         self.validator = OrderValidation(receive_topic, self.send_topic)
+
+        # pull from orders_result_sx and add them to orders table in the database 
         self.database_sender = DatabaseSender(self.send_topic)
-        self.gen_order_send_kafka = OrderRequestToKafka(store_id=self.store_id, currency=self.currency, topic_name=self.receive_topic)
-        self.send_from_database_to_kafka = SendKafka(topic_name="orders", store_id=self.store_id)
+
+        # send the orders from db of each store and send them to kakfa topic = orders
+        self.send_from_database_to_kafka = SendKafka(topic_name="orders", engine= self.engine)
 
 
-    def generate_order(self):
+    def generate_order(self) -> None:
+        """ generate orders and send them to kafka topic = order_request_sx
+        """
         self.gen_order_send_kafka.run()
 
 
-    def vaildate_order(self):
+    def vaildate_order(self)-> None:
+        """ vaild the order and send them to another kafka topic = orders_result_sx
+        """
         self.validator.run(self.engine)
 
-    def send_to_database(self):
+    def send_to_database(self) -> None:
+        """ pull from orders_result_sx and add them to orders table in the database 
+        """
         self.database_sender.send(self.engine)
 
-    def run(self):
+    def run(self) -> None:
         self.generate_order()
         self.vaildate_order()
         self.send_to_database()
+
+        # send the orders from db of each store and send them to kakfa topic = orders
         self.send_from_database_to_kafka.run()
 
 
@@ -51,14 +64,15 @@ class StoreSimulation:
             self.database_sender.kafka_producer.consumer.close()
 
 
-if __name__ == "__main__":
-    store_1 = StoreSimulation(
-        store_id="store_1",
-        currency="$",
-        receive_topic="order_request_s1",
-        send_topic="orders_result_s1",
-    )
 
+def main() -> None:
+    store_1 = StoreSimulation(
+            store_id="store_1",
+            currency="$",
+            receive_topic="order_request_s1",
+            send_topic="orders_result_s1",
+        )
+    
     store_2 = StoreSimulation(
         store_id="store_2",
         currency="SAR",
@@ -88,5 +102,8 @@ if __name__ == "__main__":
     finally:
         for store in stores:
             store.close()
-
     
+        
+
+if __name__ == "__main__":
+    main()

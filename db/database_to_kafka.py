@@ -1,4 +1,4 @@
-from messaging.database_con import DatabaseConnector
+from db.database_con import DatabaseConnector
 from sqlalchemy import text
 from messaging.kafka_client import KafkaProducer
 
