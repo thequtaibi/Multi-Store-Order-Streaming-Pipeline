@@ -1,8 +1,8 @@
 from order_generation.order_producer import OrderRequestToKafka
 from inventory.order_consumer import OrderValidation
-from db.database_sender import DatabaseSender
-from db.database_con import DatabaseConnector
-from db.db_to_kafka import SendKafka
+from db.db_sender import DatabaseSender
+from db.db_connector import DatabaseConnector
+from messaging.db_to_kafka import SendKafka
 import time
 import random
 
@@ -21,14 +21,10 @@ class StoreSimulation:
                 port=5432,
                 database=self.store_id,
             ).database_connection()
+        
         self.gen_order_send_kafka = OrderRequestToKafka(store_id=self.store_id, currency=self.currency, topic_name=self.receive_topic)    
-        # vaild the order and send them to another kafka topic = orders_result_sx
         self.validator = OrderValidation(receive_topic, self.send_topic)
-
-        # pull from orders_result_sx and add them to orders table in the database 
         self.database_sender = DatabaseSender(self.send_topic)
-
-        # send the orders from db of each store and send them to kakfa topic = orders
         self.send_from_database_to_kafka = SendKafka(topic_name="orders", engine= self.engine)
 
 

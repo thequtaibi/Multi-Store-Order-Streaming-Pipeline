@@ -14,6 +14,7 @@ class OrderValidation:
     def validation_order(self, order) -> any:
         items = order.get("orders_itemas")
         payment_status = order.get('payment_status')
+        
         if not order.get("order_id"):
             order["approval"] = False
             order["rejection_reason"] = "missing order id"

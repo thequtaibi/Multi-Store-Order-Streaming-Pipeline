@@ -1,6 +1,7 @@
-from db.database_con import DatabaseConnector
+from db.db_connector import DatabaseConnector
 from messaging.kafka_client import KafkaProducer
 
+# send orders from db to kafka topic
 
 class SendKafka:
     def __init__(self, topic_name, engine) -> None:

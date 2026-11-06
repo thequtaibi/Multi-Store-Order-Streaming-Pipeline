@@ -5,7 +5,7 @@ from uuid import uuid4
 
 
 class GenerateOreders:
-    def __init__(self, store_id, currency):
+    def __init__(self, store_id, currency) -> None:
         self.store_id = store_id
         self.currency = currency
         self.customer_id = f"CUST{random.randrange(1,9999):06d}"
@@ -36,12 +36,10 @@ class GenerateOreders:
     
         """
         orders = []
+
         for i in range(random.randint(1, 5)):
             product_id = f"PROD{random.randrange(1, 101):04d}"
             orders.append(self.add_product(product_id))
-
-
-        
 
         basket = {
             "order_id" : str(uuid4()),
@@ -55,10 +53,12 @@ class GenerateOreders:
 
         return basket
 
-
-if __name__ == "__main__":
+def main() -> None:
     orders = GenerateOreders("store_1", "$")
     print(orders.make_order())
+
+if __name__ == "__main__":
+    main()
 
 
 

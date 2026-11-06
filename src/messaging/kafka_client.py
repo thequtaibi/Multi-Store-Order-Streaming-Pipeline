@@ -9,7 +9,7 @@ logging.basicConfig(
         )
 
 class KafkaProducer:
-    def __init__(self, topic_name):
+    def __init__(self, topic_name) -> None:
         self.delivery = {"success": None}
         self.topic = topic_name
         self.config = {
@@ -23,7 +23,7 @@ class KafkaProducer:
         self.producer = Producer(self.config)
 
 
-    def delivery_callback(self, erorr, message):
+    def _delivery_callback(self, erorr, message) -> None:
             if erorr:
                 self.delivery["success"] = False
                 logging.error(f"Delivery Faild {erorr}")
@@ -37,7 +37,6 @@ class KafkaProducer:
 
 
     def send(self, orders):
-
         if isinstance(orders, dict):
             orders = [orders]
 
@@ -50,7 +49,7 @@ class KafkaProducer:
                         self.topic,
                         key=str(order_id) if order_id else None,
                         value=json.dumps(order, default=str).encode("utf-8"),
-                        callback=self.delivery_callback
+                        callback=self._delivery_callback
                     )
                 except BufferError:
                     logging.error("Producer buffer full for order_id=%s", order_id)
@@ -60,7 +59,7 @@ class KafkaProducer:
 
 
 class KafkaConsumer:
-    def __init__(self, topic_name):
+    def __init__(self, topic_name) -> None:
         self.config = {
                 'bootstrap.servers': "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
                 'security.protocol': 'SASL_SSL',
@@ -74,7 +73,7 @@ class KafkaConsumer:
         self.consumer.subscribe([topic_name])
 
 
-    def consum(self):
+    def consum(self) -> json:
         msg = self.consumer.poll(1.0)
         if msg is None:
             return []
