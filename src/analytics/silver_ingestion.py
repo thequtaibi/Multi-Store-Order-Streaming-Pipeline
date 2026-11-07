@@ -1,15 +1,4 @@
-from pyspark.sql.functions import (
-    col,
-    coalesce,
-    expr,
-    lit,
-    lower,
-    regexp_replace,
-    timestamp_seconds,
-    trim,
-    upper,
-    when,
-)
+from pyspark.sql import functions as F
 
 
 class Silver:
@@ -46,119 +35,90 @@ class Silver:
             .schema(self.schema())
             .json(f"{self.bronze_landing}*.json")
         )
-
-    def transform(self, df):
-
-
-        orders = (
-            df
-            .withColumn("original_price", col("price"))
-            .withColumn(
-                "currency",
-                when(col("price").startswith("SAR"), "SAR")
-                .when(col("price").startswith("$"), "USD")
-                .when(col("price").startswith("€"), "EUR")
-                .otherwise("UNKNOWN")
-            )
-            .withColumn(
-                "price",
-                trim(
-                    regexp_replace(
-                        col("price"),
-                        r"^(SAR|\$|€)\s*",
-                        ""
-                    )
-                )
-            )
-            .withColumn(
-                "price",
-                expr("try_cast(price AS DECIMAL(18, 2))")
-            )
-            .withColumn(
-                "total_price",
-                col("price") * col("quantity")
-            )
-            .withColumn(
-                "date",
-                timestamp_seconds(col("timestamp"))
-            )
-            .drop("timestamp")
-        )
-
+    
+    def cleaning_and_tranformation(self, df):
+        orders = (df
+                  .withColumn('price', F.regexp_replace(F.col("price"), r"^(SAR|\$|€)\s*", ""))
+                  .withColumnRename(F.col('order_id'), 'order_number')
+                  .withColumn('total_price', F.col("price") * F.col("quantity"))
+                  .wihtColumn('approval',
+                              F.when(
+                                  (F.col("payment_status") == "approved")
+                                  & (F.col("order_approval") == "true")
+                                  & (F.col("item_approval") == "true")
+                                  , True
+                              ).otherwise(False))
+                  .withCOlumn('order_date', F.to_date(F.col("timestamp")))
+                  .select(
+                      "enent_id",
+                      "order_number",
+                      "store_id",
+                      "customer_id",
+                      "product_id",
+                      "product_name",
+                      "product_category",
+                      "price",
+                      "quantity",
+                      "total_price",
+                      "order_date",
+                      "approval",
+                  ))
         
+        return orders
 
-        both_approved = (
-            (col("order_approval") == "true")
-            & (col("item_approval") == "true")
+    def product_df(self, orders):
+        return orders.select(
+            "product_id",
+            "product_name",
+            "product_category"
         )
-
-        approved_orders = (
-            orders.filter(
-            (col('order_approval') == 'true') & (col('payment_status') == 'approved') | (col('item_approval') == 'true'))
-            .select(
-                col('enent_id'),
-                col('order_id'),
-                col('customer_id'),
-                col('store_id'),
-                col('product_id'),
-                col('product_name'),
-                col('product_category'),
-                col('price'),
-                col('quantity'),
-                col('total_price'),
-                col('date'))
-            )
-
-        
-
-        rejected_orders = (orders.filter(
-            (col('order_approval') == 'false') & (col('payment_status') == 'rejected') | (col('item_approval') == 'false')
+    
+    def orders_df(self, orders):
+        return orders.select(
+             "enent_id",
+            "order_number",
+            "store_id",
+            "customer_id",
+            "product_id",
+            "price",
+            "quantity",
+            "total_price",
+            "order_date",
+            "approval"
         )
-        .select("*")
-        )
+                  
 
-        return approved_orders, rejected_orders
-
-    def approved_orders_load(self, df):
+    def load(self, df_name , df):
         return (
             df.writeStream
             .format("delta")
-            .queryName("silver_ingestion_approved")
+            .queryName(f"silver_ingestion_{df_name}")
             .option(
                 "checkpointLocation",
-                f"{self.checkpoint}/approved"
+                f"{self.checkpoint}/{df_name}"
             )
             .outputMode("append")
-            .toTable(f"{self.silver_dir}.approval_orders")
+            .toTable(f"{self.silver_dir}.{df_name}")
         )
 
-    def rejected_orders_load(self, df):
-        return (
-            df.writeStream
-            .format("delta")
-            .queryName("silver_ingestion_rejected")
-            .option(
-                "checkpointLocation",
-                f"{self.checkpoint}/rejected"
-            )
-            .outputMode("append")
-            .toTable(f"{self.silver_dir}.rejected_orders")
-        )
-
-    def run(self):
-        df_raw = self.extract_from_bronze()
-
-        approved_orders, rejected_orders = self.transform(df_raw)
-
-        approved_query = self.approved_orders_load(approved_orders)
-        rejected_query = self.rejected_orders_load(rejected_orders)
-
-        return approved_query, rejected_query
 
 
+    def run_pipeline(self):
+        raw_df = self.extract_from_bronze()
+        cleaned_df = self.cleaning_and_tranformation(raw_df)
+        product_df = self.product_df(cleaned_df)
+        orders_df = self.orders_df(cleaned_df)
+
+        sQuery_product = self.load('product_df', product_df)
+        sQuery_orders_df = self.load('orders_df', orders_df)
+
+        return sQuery_orders_df, sQuery_product
 
 
-approved_query, rejected_query = Silver().run()
+def main() -> None:
+    silver = Silver()
+    sQuery_orders_df, sQuery_product = silver.run_pipeline()
 
-approved_query.awaitTermination()
-rejected_query.awaitTermination()
+    sQuery_orders_df.awaitTermination()
+    sQuery_product.awaitTermination()
+
