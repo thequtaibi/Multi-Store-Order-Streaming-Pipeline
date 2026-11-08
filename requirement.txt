@@ -2,6 +2,3 @@ SQLAlchemy
 psycopg[binary]
 confluent-kafka
 python-dotenv
-
-# Databricks includes PySpark; install this for local analytics work.
-pyspark
