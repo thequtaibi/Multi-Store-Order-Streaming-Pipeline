@@ -1,3 +1,4 @@
+from config import kafka_settings
 from confluent_kafka import Consumer, Producer
 import json
 import logging
@@ -12,14 +13,7 @@ class KafkaProducer:
     def __init__(self, topic_name) -> None:
         self.delivery = {"success": None}
         self.topic = topic_name
-        self.config = {
-            'bootstrap.servers': "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
-            'security.protocol': 'SASL_SSL',
-            'sasl.mechanism': 'PLAIN',
-            'sasl.username': "XGHEHXEMAZQYC2KF",
-            'sasl.password': "cfltHgWM/vc/nHn2OjiklhgXuIUdyYm8iF1sUbqjroN5K3ZAz1z/myO44aRgQH2A",
-            'client.id': 'store',
-        }
+        self.config = kafka_settings()
         self.producer = Producer(self.config)
 
 
@@ -60,15 +54,11 @@ class KafkaProducer:
 
 class KafkaConsumer:
     def __init__(self, topic_name) -> None:
-        self.config = {
-                'bootstrap.servers': "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
-                'security.protocol': 'SASL_SSL',
-                'sasl.mechanism': 'PLAIN',
-                'sasl.username': "XGHEHXEMAZQYC2KF",
-                'sasl.password': "cfltHgWM/vc/nHn2OjiklhgXuIUdyYm8iF1sUbqjroN5K3ZAz1z/myO44aRgQH2A",                    
-                'group.id': 'orders_debug_02',
-                'auto.offset.reset': 'earliest'
-                }
+        self.config = kafka_settings()
+        self.config.update({
+            "group.id": "orders_debug_02",
+            "auto.offset.reset": "earliest",
+        })
         self.consumer = Consumer(self.config)
         self.consumer.subscribe([topic_name])
 

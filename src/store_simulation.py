@@ -1,3 +1,4 @@
+from config import database_settings
 from order_generation.order_producer import OrderRequestToKafka
 from inventory.order_consumer import OrderValidation
 from db.db_sender import DatabaseSender
@@ -14,13 +15,9 @@ class StoreSimulation:
         self.send_topic = send_topic
         
         self.engine = DatabaseConnector(
-                drivername="postgresql+psycopg",
-                username="khlk4004",
-                password="4004",
-                host="localhost",
-                port=5432,
-                database=self.store_id,
-            ).database_connection()
+            database=self.store_id,
+            **database_settings(),
+        ).database_connection()
         
         self.gen_order_send_kafka = OrderRequestToKafka(store_id=self.store_id, currency=self.currency, topic_name=self.receive_topic)    
         self.validator = OrderValidation(receive_topic, self.send_topic)

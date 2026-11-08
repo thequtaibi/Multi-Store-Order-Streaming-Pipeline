@@ -1,21 +1,43 @@
+import json
+import os
+
+# databricks notebook
+
+
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import from_json, col
+
+def kafka_options():
+    """Read credentials from the Databricks runtime environment."""
+    names = (
+        "KAFKA_BOOTSTRAP_SERVERS",
+        "KAFKA_SASL_USERNAME",
+        "KAFKA_SASL_PASSWORD",
+    )
+    missing = [name for name in names if not os.environ.get(name, "").strip()]
+    if missing:
+        raise ValueError("Missing Kafka environment variables: " + ", ".join(missing))
+
+    username = json.dumps(os.environ["KAFKA_SASL_USERNAME"], ensure_ascii=False)
+    password = json.dumps(os.environ["KAFKA_SASL_PASSWORD"], ensure_ascii=False)
+    return {
+        "kafka.bootstrap.servers": os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+        "subscribe": "orders",
+        "startingOffsets": "earliest",
+        "kafka.security.protocol": "SASL_SSL",
+        "kafka.sasl.mechanism": "PLAIN",
+        "kafka.sasl.jaas.config": (
+            "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule "
+            f"required username={username} password={password};"
+        ),
+    }
+
 
 class Bronze:
     def __init__(self) -> None:
         self.landing_dir = "/Volumes/orders/bronze/landing/new_orders/"
         self.checkpoint = "/Volumes/orders/bronze/checkpoint/kafka_to_json/"
-        self.kafka_conf = {
-            "kafka.bootstrap.servers": "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
-            "subscribe": "orders",
-            "startingOffsets": "earliest",
-            "kafka.security.protocol": "SASL_SSL",
-            "kafka.sasl.mechanism": "PLAIN",
-            "kafka.sasl.jaas.config": (
-                "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule "
-                f'required username="XGHEHXEMAZQYC2KF" password="cfltHgWM/vc/nHn2OjiklhgXuIUdyYm8iF1sUbqjroN5K3ZAz1z/myO44aRgQH2A";'
-                ),
-        }
+        self.kafka_conf = kafka_options()
     
     def _schema(self) -> any:
         return """

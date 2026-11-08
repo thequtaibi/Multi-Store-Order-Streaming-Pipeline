@@ -1,80 +1,149 @@
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import from_json, col
+# databricks notebook
 
-class IngestionData:
-    def __init__(self) -> None:
-        self.landing_dir = "/Volumes/orders/bronze/landing/new_orders/"
-        self.checkpoint = "/Volumes/orders/bronze/checkpoint/kafka_to_json/"
-        self.kafka_conf = {
-            "kafka.bootstrap.servers": "pkc-30550.qatarcentral.azure.confluent.cloud:9092",
-            "subscribe": "orders",
-            "startingOffsets": "earliest",
-            "kafka.security.protocol": "SASL_SSL",
-            "kafka.sasl.mechanism": "PLAIN",
-            "kafka.sasl.jaas.config": (
-                "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule "
-                f'required username="XGHEHXEMAZQYC2KF" password="cfltHgWM/vc/nHn2OjiklhgXuIUdyYm8iF1sUbqjroN5K3ZAz1z/myO44aRgQH2A";'
-                ),
-        }
-    
-    def _schema(self) -> any:
+
+
+from pyspark.sql import functions as F
+
+
+class Silver:
+    def __init__(self):
+        self.silver_dir = "orders.silver"
+        self.checkpoint = "/Volumes/orders/silver/checkpoint"
+
+        # Must match your Bronze writer's output path.
+        self.bronze_landing = "/Volumes/orders/bronze/landing/new_orders/"
+
+    def schema(self):
         return """
-                enent_id STRING,
-                order_id STRING,
-                customer_id STRING,
-                store_id STRING,
-                product_id STRING,
-                product_name STRING,
-                product_category STRING,
-                price STRING,
-                quantity INT,
-                payment_status STRING,
-                timestamp Double,
-                order_approval STRING,
-                order_rejection_reason STRING,
-                item_approval STRING,
-                item_rejection_reason STRING,
-                sent_to_kafka STRING
-            """
+            enent_id STRING,
+            order_id STRING,
+            customer_id STRING,
+            store_id STRING,
+            product_id STRING,
+            product_name STRING,
+            product_category STRING,
+            price STRING,
+            quantity INT,
+            payment_status STRING,
+            timestamp DOUBLE,
+            order_approval STRING,
+            order_rejection_reason STRING,
+            item_approval STRING,
+            item_rejection_reason STRING,
+            sent_to_kafka STRING
+        """
 
 
-    def extarct_from_kafka(self) -> DataFrame:
-        return spark.readStream.format("kafka").options(**self.kafka_conf).load()
-    
-
-    def tranform_to_json(self, df_kafka) -> DataFrame:
+    def extract_from_bronze(self):
         return (
-            df_kafka
-            .select(from_json(col("value").cast("string"), self._schema()).alias("order"))
-            .select("order.*")
-            )
+            spark.readStream
+            .schema(self.schema())
+            .json(f"{self.bronze_landing}*.json")
+        )
     
-    def load_to_json(self, df_json) -> any:
-        print("starting load_to_json")
-        sQuery = (
-            df_json.writeStream
-            .format("json")
-            .queryName("ingestion_data_from_kafka")
-            .outputMode('append')
-            .option("maxRecordsPerFile", 1) # make 1 file for each order
-            .option('path', self.landing_dir)
-            .option('checkpointLocation', self.checkpoint)
-            # .trigger(processingTime="10 seconds")
-            .start()
-            )
+
+    def cleaning_and_tranformation(self, df):
+        orders = (df
+                  .withColumn('currency', 
+                              F.when(F.col("price").startswith("SAR"), "SAR")
+                              .when(F.col("price").startswith("$"), "USD")
+                              .when(F.col("price").startswith("€"), "EUR"))
+                  
+                  .withColumn('price', F.round(F.regexp_replace(F.col("price"), r"^(SAR|\$|€)\s*", ""),2))
+                  .withColumn('price', F.col("price").cast("double"))
+                  .withColumnRenamed('order_id', 'order_number')
+                  .withColumn('total_price', F.col("price") * F.col("quantity"))
+                  
+                  .withColumn('order_approval',
+                              F.when(
+                                  (F.col("payment_status") == "approved")
+                                  & (F.col("order_approval") == "true")
+                                  , True
+                              ).otherwise(False))
+                  .withColumn('item_approval',
+                              F.when(
+                                  (F.col("payment_status") == "approved")
+                                  & (F.col("item_approval") == "true")
+                                  , True
+                              ).otherwise(False))
+                  
+                  .withColumn('order_date', F.to_date(F.from_unixtime(F.col("timestamp"))))
+                  
+                  .select(
+                      "enent_id",
+                      "order_number",
+                      "store_id",
+                      "customer_id",
+                      "product_id",
+                      "product_name",
+                      "product_category",
+                      "price",
+                      "quantity",
+                      "total_price",
+                      "currency",
+                      "order_date",
+                      "order_approval",
+                      "item_approval",
+                  ))
         
-        return sQuery
+        return orders
+
+
+    def orders_df(self, orders):
+        return orders.select(
+             "enent_id",
+            "order_number",
+            "store_id",
+            "customer_id",
+            "product_id",
+            "price",
+            "quantity",
+            "total_price",
+            "currency",
+            "order_approval",
+            "item_approval"
+        )
+
+
+
+    def orders_load(self, df):
+        return (
+            df.writeStream
+                .format("delta")
+                .queryName(f"silver_ingestion_orders")
+                .option("checkpointLocation", f"{self.checkpoint}/orders")
+                .outputMode("append")
+                .toTable(f"{self.silver_dir}.orders")
+        )
+
+    def product_load(self, df):
+        return (
+            df.writeStream
+                .queryName('silver_ingestion_product')
+                .option("checkpointLocation", f"{self.checkpoint}/product")
+                .foreachBatch(self.insert_new_products)
+                .start()
+            )
+
+
+    def orders_pipeline(self):
+        raw_df = self.extract_from_bronze()
+        cleaned_df = self.cleaning_and_tranformation(raw_df)
+        orders_df = self.orders_df(cleaned_df)
+        sQuery_orders_df = self.orders_load(orders_df)
+
+        return sQuery_orders_df
     
-    def run_pipeline(self) -> any:
-        print("starting...")
-        df_kafa = self.extarct_from_kafka()
-        df = self.tranform_to_json(df_kafa)
-        sQuery = self.load_to_json(df)
-        return sQuery
+    
+
+
 
 def main() -> None:
-    ingestion = IngestionData()
-    sQuery = ingestion.run_pipeline()
-    sQuery.awaitTermination()
+    silver = Silver()
+
+    sQuery_orders_df = silver.orders_pipeline()
+    sQuery_orders_df.awaitTermination()
+
+
 
 main()
