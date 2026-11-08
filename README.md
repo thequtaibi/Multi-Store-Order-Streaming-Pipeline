@@ -44,3 +44,6 @@ python src/store_simulation.py
 Run the analytics stages separately in Databricks with access to Kafka and the configured volumes and tables. Set the same `KAFKA_*` variables in the Databricks runtime, using [Databricks secrets](https://docs.databricks.com/aws/en/security/secrets/secrets-spark-conf-env-var) for credentials.
 
 Before publishing, rotate the old Kafka credentials and database password. Previous Git commits still contain them.
+
+> **Note**: 
+> This project was developed entirely by human, without relying on AI generated code. While I have nothing against using AI to accelerate development, I chose to build this project independently to challenge myself, test my knowledge, and improve my programming skills.
